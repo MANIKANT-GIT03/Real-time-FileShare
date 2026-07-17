@@ -1,6 +1,9 @@
 const userService = require('../services/userService');
-async function signup(req, res) {
-    try {
+
+async function signup(req, res) 
+{
+    try 
+    {
         const { username, email, password } = req.body;
 
         if (!username || !email || !password) {
@@ -29,8 +32,12 @@ async function signup(req, res) {
         res.status(500).json({ error: 'Something went wrong' });
     }
 }
-async function login(req, res) {
-    try {
+
+
+async function login(req, res) 
+{
+    try 
+    {
         const { email, password } = req.body;
 
         if (!email || !password) {
@@ -55,8 +62,12 @@ async function login(req, res) {
         res.status(500).json({ error: 'Something went wrong' });
     }
 }
-async function me(req, res) {
-    try {
+
+
+async function me(req, res) 
+{
+    try 
+    {
         const user = await userService.getUserById(req.user.userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -67,6 +78,8 @@ async function me(req, res) {
         res.status(500).json({ error: 'Something went wrong' });
     }
 }
+
+
 module.exports = {
     signup,
     login,
