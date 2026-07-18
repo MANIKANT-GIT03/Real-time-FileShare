@@ -7,7 +7,15 @@ async function validateMagicBytes(filePath, originalName) {
     const detected = await fileTypeFromFile(filePath);
 
     if (detected) {
-        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+        const allowed = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
         if (!allowed.includes(detected.mime)) {
             throw new Error(`File type "${detected.mime}" is not allowed`);
         }
@@ -15,7 +23,7 @@ async function validateMagicBytes(filePath, originalName) {
     }
 
     const ext = path.extname(originalName).toLowerCase();
-    if (['.txt', '.csv', '.md', '.json', '.log'].includes(ext)) {
+    if (['.txt', '.csv', '.md', '.json', '.log', '.doc', '.docx'].includes(ext)) {
         return 'text/plain';
     }
 
