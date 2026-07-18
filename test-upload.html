@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Upload</title>
+</head>
+
+<body>
+    <h2>Upload Test</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="file" id="fileInput" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>My Files</h2>
+    <button onclick="loadFiles()">Refresh List</button>
+    <ul id="fileList"></ul>
+
+    <script>
+        const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWxpY2UiLCJpYXQiOjE3ODQzOTg0NzAsImV4cCI6MTc4NTAwMzI3MH0.Y8qpPq3RhkeBpiAkHKAkV71Nl70p6bPZ5-QDLlBMSXs'; // Replace this with your actual token
+
+        document.getElementById('uploadForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('file', document.getElementById('fileInput').files[0]);
+
+            const res = await fetch('http://localhost:3000/api/files', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + TOKEN },
+                body: formData
+            });
+
+            const data = await res.json();
+            console.log(data);
+            alert(data.message || data.error);
+            loadFiles();
+        };
+
+        async function loadFiles() {
+            const res = await fetch('http://localhost:3000/api/files?page=1&limit=10', {
+                headers: { 'Authorization': 'Bearer ' + TOKEN }
+            });
+            const data = await res.json();
+            console.log(data);
+
+            const list = document.getElementById('fileList');
+            list.innerHTML = '';
+            data.files.forEach(file => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+          ${file.original_name} (${(file.size / 1024).toFixed(1)} KB) 
+          <a href="http://localhost:3000/api/files/${file.id}/download" target="_blank" onclick="event.preventDefault(); downloadFile('${file.id}', '${file.original_name}')">Download</a>
+          <button onclick="deleteFile('${file.id}')">Delete</button>
+        `;
+                list.appendChild(li);
+            });
+        }
+
+        async function downloadFile(id, name) {
+            const res = await fetch(`http://localhost:3000/api/files/${id}/download`, {
+                headers: { 'Authorization': 'Bearer ' + TOKEN }
+            });
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            a.click();
+        }
+
+        async function deleteFile(id) {
+            const res = await fetch(`http://localhost:3000/api/files/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + TOKEN }
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+            loadFiles();
+        }
+
+        loadFiles();
+    </script>
+</body>
+
+</html>
