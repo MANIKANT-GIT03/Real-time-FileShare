@@ -25,6 +25,18 @@ async function create(req, res) {
 
         const share = await shareService.createShare(fileId, ownerId, maxDl, expiry);
 
+        // Emit real-time event
+const io = req.app.get('io');
+if (io) {
+    io.to(`user:${ownerId}`).emit('file:shared', {
+        share: {
+            code: share.share_code,
+            fileId: fileId,
+            expiresAt: share.expires_at
+        }
+    });
+}
+
         res.status(201).json({
             message: 'Share code created',
             share: {
@@ -57,6 +69,16 @@ async function redeem(req, res) {
         if (!share) {
             return res.status(404).json({ error: 'Invalid, expired, or fully-used share code' });
         }
+
+
+        // Notify the file owner that someone redeemed their code
+const io = req.app.get('io');
+if (io && share) {
+    io.to(`user:${share.owner_id}`).emit('share:redeemed', {
+        code: share.share_code,
+        fileName: share.original_name
+    });
+}
 
         res.json({
             file: {

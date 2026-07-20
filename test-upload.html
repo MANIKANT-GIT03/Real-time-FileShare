@@ -1,10 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FileShare - Phase 3</title>
+    <title>FileShare - Phase 4</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -37,11 +35,44 @@
             padding: 5px;
             margin: 5px;
         }
+
+        #toast {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        #toast.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 
 <body>
     <h1>FileShare</h1>
+
+    <!-- Toast Notification -->
+    <div id="toast"></div>
 
     <h2>Upload</h2>
     <form id="uploadForm" enctype="multipart/form-data">
@@ -58,8 +89,65 @@
     <button onclick="redeemCode()">Redeem</button>
     <div id="redeemResult"></div>
 
+    <!-- Socket.io client library (served automatically by the server) -->
+    <script src="/socket.io/socket.io.js"></script>
+
     <script>
-        const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWxpY2UiLCJpYXQiOjE3ODQzOTg0NzAsImV4cCI6MTc4NTAwMzI3MH0.Y8qpPq3RhkeBpiAkHKAkV71Nl70p6bPZ5-QDLlBMSXs';
+        const TOKEN = 'YOUR_TOKEN_HERE';
+
+        // Initialize Socket.io connection
+        const socket = io('http://localhost:3000', {
+            auth: { token: TOKEN }
+        });
+
+        // Connection status
+        socket.on('connect', () => {
+            console.log('Socket connected:', socket.id);
+            showToast('Real-time connection active');
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error('Socket connection error:', err.message);
+            showToast('Connection error: ' + err.message);
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('Socket disconnected:', reason);
+        });
+
+        // Real-time event: new file uploaded
+        socket.on('file:uploaded', (data) => {
+            console.log('Real-time: file uploaded', data);
+            showToast(`New file uploaded: ${data.file.originalName}`);
+            loadFiles(); // Refresh the file list
+        });
+
+        // Real-time event: file deleted
+        socket.on('file:deleted', (data) => {
+            console.log('Real-time: file deleted', data);
+            showToast('File deleted');
+            loadFiles(); // Refresh the file list
+        });
+
+        // Real-time event: share created
+        socket.on('file:shared', (data) => {
+            console.log('Real-time: file shared', data);
+            showToast(`Share code created: ${data.share.code}`);
+        });
+
+        // Real-time event: someone redeemed your share code
+        socket.on('share:redeemed', (data) => {
+            console.log('Real-time: share redeemed', data);
+            showToast(`Someone downloaded: ${data.fileName}`);
+        });
+
+        // Toast notification helper
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'show';
+            setTimeout(() => { toast.className = ''; }, 3000);
+        }
 
         // Upload
         document.getElementById('uploadForm').onsubmit = async (e) => {
@@ -90,6 +178,7 @@
             data.files.forEach(file => {
                 const div = document.createElement('div');
                 div.className = 'file-item';
+                div.id = `file-${file.id}`;
                 div.innerHTML = `
           <strong>${file.original_name}</strong> (${(file.size / 1024).toFixed(1)} KB)
           <br>
@@ -134,7 +223,7 @@
                     'Authorization': 'Bearer ' + TOKEN,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ expiryMinutes: 10, maxDownloads: 3 })
+                body: JSON.stringify({ expiryMinutes: 30, maxDownloads: 3 })
             });
             const data = await res.json();
 

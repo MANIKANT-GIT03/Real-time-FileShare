@@ -64,21 +64,22 @@ async function createShare(fileId, ownerId, maxDownloads = null, expiryMinutes =
 async function getShareByCode(code) {
     const result = await query(
         `SELECT 
-        s.id as share_id,
-        s.share_code,
-        s.expires_at,
-        s.max_downloads,
-        s.download_count,
-        f.id as file_id,
-        f.original_name,
-        f.storage_name,
-        f.mime_type,
-        f.size
-        FROM shares s
-        JOIN files f ON s.file_id = f.id
-        WHERE s.share_code = $1
-        AND s.expires_at > NOW()
-        AND (s.max_downloads IS NULL OR s.download_count < s.max_downloads)`,
+    s.id as share_id,
+    s.share_code,
+    s.expires_at,
+    s.max_downloads,
+    s.download_count,
+    f.id as file_id,
+    f.original_name,
+    f.storage_name,
+    f.mime_type,
+    f.size,
+    f.owner_id
+    FROM shares s
+    JOIN files f ON s.file_id = f.id
+    WHERE s.share_code = $1
+       AND s.expires_at > NOW()
+       AND (s.max_downloads IS NULL OR s.download_count < s.max_downloads)`,
         [code]
     );
 

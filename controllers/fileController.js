@@ -8,14 +8,14 @@ async function validateMagicBytes(filePath, originalName) {
 
     if (detected) {
         const allowed = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-];
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
         if (!allowed.includes(detected.mime)) {
             throw new Error(`File type "${detected.mime}" is not allowed`);
         }
@@ -39,7 +39,7 @@ async function validateMagicBytes(filePath, originalName) {
 
 async function upload(req, res) {
     console.log('UPLOAD FUNCTION RUNNING');
-    
+
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -60,6 +60,18 @@ async function upload(req, res) {
             req.file.size,
             realMimeType
         );
+
+        // Emit real-time event to all of this user's connected tabs
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${ownerId}`).emit('file:uploaded', {
+                file: {
+                    originalName,
+                    size,
+                    mimeType: realMimeType
+                }
+            });
+        }
 
         res.status(201).json({ message: 'File uploaded successfully' });
     } catch (err) {
@@ -96,12 +108,28 @@ async function download(req, res) {
 
 async function remove(req, res) {
     try {
-        const storageName = await fileService.deleteFile(req.params.id, req.user.userId);
+        const fileId = req.params.id;
+        const ownerId = req.user.userId;
+
+        const storageName = await fileService.deleteFile(fileId, ownerId);
+
+        // Delete from disk
         const filePath = path.join(__dirname, '..', 'uploads', storageName);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+        // Emit real-time event to all of this user's tabs
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${ownerId}`).emit('file:deleted', { fileId });
+        }
+
         res.json({ message: 'File deleted successfully' });
     } catch (err) {
-        if (err.message === 'File not found') return res.status(404).json({ error: err.message });
+        if (err.message === 'File not found') {
+            return res.status(404).json({ error: err.message });
+        }
         res.status(500).json({ error: err.message });
     }
 }
