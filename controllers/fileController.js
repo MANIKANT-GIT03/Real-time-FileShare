@@ -84,8 +84,22 @@ async function upload(req, res) {
 
 async function list(req, res) {
     try {
-        const result = await fileService.getFiles(req.user.userId, parseInt(req.query.page) || 1, parseInt(req.query.limit) || 20);
-        res.json({ files: result.files, pagination: { page: parseInt(req.query.page) || 1, limit: parseInt(req.query.limit) || 20, total: result.total } });
+        const ownerId = req.user.userId;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const search = req.query.q || null;
+        
+        const result = await fileService.getFiles(ownerId, page, limit, search);
+        
+        res.json({
+            files: result.files,
+            pagination: {
+                page,
+                limit,
+                total: result.total,
+                totalPages: Math.ceil(result.total / limit)
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

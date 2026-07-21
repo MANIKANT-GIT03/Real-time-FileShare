@@ -1,288 +1,132 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>FileShare - Phase 4</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .file-item {
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-
-        .share-box {
-            background: #f0f0f0;
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 3px;
-        }
-
-        button {
-            margin: 0 5px;
-            padding: 5px 10px;
-            cursor: pointer;
-        }
-
-        input {
-            padding: 5px;
-            margin: 5px;
-        }
-
-        #toast {
-            display: none;
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #333;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 5px;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        }
-
-        #toast.show {
-            display: block;
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileShare</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
-
 <body>
-    <h1>FileShare</h1>
+    <!-- Toast container (top-right) -->
+    <div id="toast-container" class="toast-container"></div>
 
-    <!-- Toast Notification -->
-    <div id="toast"></div>
+    <!-- AUTH VIEW -->
+    <div id="auth-view" class="view auth-view">
+        <div class="auth-box">
+            <h1>📦 FileShare</h1>
+            <p class="subtitle">Real-time file sharing</p>
 
-    <h2>Upload</h2>
-    <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" name="file" id="fileInput" required>
-        <button type="submit">Upload</button>
-    </form>
+            <!-- Login -->
+            <div id="login-panel">
+                <input type="email" id="login-email" placeholder="Email" autocomplete="email">
+                <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+                <button class="btn-primary" onclick="login()">Log In</button>
+                <p class="toggle">No account? <a href="#" onclick="switchAuth('signup')">Sign up</a></p>
+                <p class="toggle"><a href="#" onclick="openRedeemFromAuth()">Redeem a share code</a></p>
+            </div>
 
-    <h2>My Files</h2>
-    <button onclick="loadFiles()">Refresh</button>
-    <div id="fileList"></div>
+            <!-- Signup -->
+            <div id="signup-panel" class="hidden">
+                <input type="text" id="signup-username" placeholder="Username" autocomplete="username">
+                <input type="email" id="signup-email" placeholder="Email" autocomplete="email">
+                <input type="password" id="signup-password" placeholder="Password (8+ chars)" autocomplete="new-password">
+                <button class="btn-primary" onclick="signup()">Create Account</button>
+                <p class="toggle">Have an account? <a href="#" onclick="switchAuth('login')">Log in</a></p>
+            </div>
+        </div>
+    </div>
 
-    <h2>Redeem Share Code</h2>
-    <input type="text" id="redeemCode" placeholder="Enter 6-digit code" maxlength="6">
-    <button onclick="redeemCode()">Redeem</button>
-    <div id="redeemResult"></div>
+    <!-- APP VIEW -->
+    <div id="app-view" class="view hidden">
+        <header class="app-header">
+            <div class="brand">📦 FileShare</div>
+            <div class="header-actions">
+                <button class="btn-ghost" onclick="openRedeemModal()">Redeem Code</button>
+                <div class="user-pill">
+                    <span id="user-name"></span>
+                    <span id="storage-info" class="storage-badge"></span>
+                    <button class="btn-logout" onclick="logout()" title="Logout">⎋</button>
+                </div>
+            </div>
+        </header>
 
-    <!-- Socket.io client library (served automatically by the server) -->
+        <main class="app-main">
+            <!-- Upload Zone -->
+            <div id="upload-zone" class="upload-zone">
+                <div class="upload-prompt">
+                    <div class="upload-icon">⬆</div>
+                    <p><strong>Drag & drop</strong> files here or <span class="link" onclick="document.getElementById('file-input').click()">browse</span></p>
+                    <input type="file" id="file-input" hidden onchange="handleFileSelect(event)">
+                </div>
+                <div id="upload-progress" class="upload-progress hidden">
+                    <div class="progress-track">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <span id="progress-text" class="progress-text">0%</span>
+                </div>
+            </div>
+
+            <!-- File Grid -->
+            <div id="file-grid" class="file-grid"></div>
+
+            <!-- Pagination -->
+            <div id="pagination" class="pagination"></div>
+        </main>
+    </div>
+
+    <!-- SHARE MODAL -->
+    <div id="share-modal" class="modal hidden" onclick="if(event.target===this) closeShareModal()">
+        <div class="modal-card">
+            <h3>Create Share</h3>
+            <p class="modal-filename" id="share-file-name"></p>
+
+            <div class="form-row">
+                <label>Expiry (minutes)</label>
+                <input type="number" id="share-expiry" value="30" min="1" max="60">
+            </div>
+            <div class="form-row">
+                <label>Max Downloads <small>(leave empty for unlimited)</small></label>
+                <input type="number" id="share-max-downloads" placeholder="Unlimited" min="1">
+            </div>
+
+            <div id="share-result" class="share-result hidden">
+                <div class="code-box">
+                    <span id="share-code" class="code-text"></span>
+                    <button class="btn-copy" onclick="copyShareCode()" title="Copy">📋</button>
+                </div>
+                <div class="countdown" id="share-countdown"></div>
+                <p class="hint" id="share-expiry-display"></p>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-generate" class="btn-primary" onclick="createShare()">Generate Code</button>
+                <button class="btn-ghost" onclick="closeShareModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REDEEM MODAL -->
+    <div id="redeem-modal" class="modal hidden" onclick="if(event.target===this) closeRedeemModal()">
+        <div class="modal-card">
+            <h3>Redeem Share Code</h3>
+            <input type="text" id="redeem-code" placeholder="000000" maxlength="6" inputmode="numeric" pattern="\d*">
+            <button class="btn-primary" onclick="redeemCode()">Redeem</button>
+
+            <div id="redeem-result" class="redeem-result hidden">
+                <div class="file-preview">
+                    <span class="big-icon">📄</span>
+                    <p id="redeem-file-name" class="filename"></p>
+                </div>
+                <button class="btn-primary" id="redeem-download-btn" onclick="downloadSharedFile()">Download File</button>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-ghost" onclick="closeRedeemModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
-
-    <script>
-        let TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYWxpY2UiLCJpYXQiOjE3ODQzOTg0NzAsImV4cCI6MTc4NTAwMzI3MH0.Y8qpPq3RhkeBpiAkHKAkV71Nl70p6bPZ5-QDLlBMSXs';
-
-        // Initialize Socket.io connection
-        const socket = io('http://localhost:3000', {
-            auth: { token: TOKEN }
-        });
-
-        // Connection status
-        socket.on('connect', () => {
-            console.log('Socket connected:', socket.id);
-            showToast('Real-time connection active');
-        });
-
-        socket.on('connect_error', (err) => {
-            console.error('Socket connection error:', err.message);
-            showToast('Connection error: ' + err.message);
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.log('Socket disconnected:', reason);
-        });
-
-        // Real-time event: new file uploaded
-        socket.on('file:uploaded', (data) => {
-            console.log('Real-time: file uploaded', data);
-            showToast(`New file uploaded: ${data.file.originalName}`);
-            loadFiles(); // Refresh the file list
-        });
-
-        // Real-time event: file deleted
-        socket.on('file:deleted', (data) => {
-            console.log('Real-time: file deleted', data);
-            showToast('File deleted');
-            loadFiles(); // Refresh the file list
-        });
-
-        // Real-time event: share created
-        socket.on('file:shared', (data) => {
-            console.log('Real-time: file shared', data);
-            showToast(`Share code created: ${data.share.code}`);
-        });
-
-        // Real-time event: someone redeemed your share code
-        socket.on('share:redeemed', (data) => {
-            console.log('Real-time: share redeemed', data);
-            showToast(`Someone downloaded: ${data.fileName}`);
-        });
-
-        // Toast notification helper
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'show';
-            setTimeout(() => { toast.className = ''; }, 3000);
-        }
-
-        // Upload
-        document.getElementById('uploadForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const formData = new FormData();
-            formData.append('file', document.getElementById('fileInput').files[0]);
-
-            const res = await fetch('http://localhost:3000/api/files', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + TOKEN },
-                body: formData
-            });
-            const data = await res.json();
-            alert(data.message || data.error);
-            loadFiles();
-            document.getElementById('fileInput').value = '';
-        };
-
-        // List files
-        async function loadFiles() {
-            const res = await fetch('http://localhost:3000/api/files?page=1&limit=20', {
-                headers: { 'Authorization': 'Bearer ' + TOKEN }
-            });
-            const data = await res.json();
-
-            const list = document.getElementById('fileList');
-            list.innerHTML = '';
-
-            data.files.forEach(file => {
-                const div = document.createElement('div');
-                div.className = 'file-item';
-                div.id = `file-${file.id}`;
-                div.innerHTML = `
-          <strong>${file.original_name}</strong> (${(file.size / 1024).toFixed(1)} KB)
-          <br>
-          <button onclick="downloadFile('${file.id}', '${file.original_name}')">Download</button>
-          <button onclick="deleteFile('${file.id}')">Delete</button>
-          <button onclick="createShare('${file.id}')">Share</button>
-          <div id="share-${file.id}"></div>
-        `;
-                list.appendChild(div);
-            });
-        }
-
-        // Download (authenticated)
-        async function downloadFile(id, name) {
-            const res = await fetch(`http://localhost:3000/api/files/${id}/download`, {
-                headers: { 'Authorization': 'Bearer ' + TOKEN }
-            });
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = name;
-            a.click();
-        }
-
-        // Delete
-        async function deleteFile(id) {
-            const res = await fetch(`http://localhost:3000/api/files/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': 'Bearer ' + TOKEN }
-            });
-            const data = await res.json();
-            alert(data.message || data.error);
-            loadFiles();
-        }
-
-        // Create share
-        async function createShare(fileId) {
-            const res = await fetch(`http://localhost:3000/api/shares/files/${fileId}/share`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + TOKEN,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ expiryMinutes: 30, maxDownloads: 3 })
-            });
-            const data = await res.json();
-
-            const box = document.getElementById(`share-${fileId}`);
-            if (data.share) {
-                box.className = 'share-box';
-                box.innerHTML = `
-          <strong>Share Code: ${data.share.code}</strong><br>
-          Expires: ${new Date(data.share.expiresAt).toLocaleString()}<br>
-          Max Downloads: ${data.share.maxDownloads || 'unlimited'}
-        `;
-            } else {
-                box.innerHTML = `<span style="color:red">${data.error}</span>`;
-            }
-        }
-
-        // Redeem share code
-        async function redeemCode() {
-            const code = document.getElementById('redeemCode').value;
-            const resultDiv = document.getElementById('redeemResult');
-
-            if (!/^\d{6}$/.test(code)) {
-                resultDiv.innerHTML = '<span style="color:red">Code must be exactly 6 digits</span>';
-                return;
-            }
-
-            const res = await fetch('http://localhost:3000/api/shares/redeem', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
-            });
-            const data = await res.json();
-
-            if (data.file) {
-                resultDiv.innerHTML = `
-          <div class="share-box">
-            <strong>${data.file.name}</strong> (${(data.file.size / 1024).toFixed(1)} KB)<br>
-            <button onclick="downloadShared('${code}', '${data.file.name}')">Download</button>
-          </div>
-        `;
-            } else {
-                resultDiv.innerHTML = `<span style="color:red">${data.error}</span>`;
-            }
-        }
-
-        // Download via share code (no auth needed)
-        async function downloadShared(code, name) {
-            const res = await fetch(`http://localhost:3000/api/shares/${code}/download`);
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = name;
-            a.click();
-        }
-
-        loadFiles();
-    </script>
+    <script src="/app.js"></script>
 </body>
-
 </html>

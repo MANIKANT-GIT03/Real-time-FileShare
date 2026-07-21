@@ -1,7 +1,7 @@
-const { query } = require('../db');
+const { query, pool } = require('../db');
 
 async function createFile(ownerId, originalName, storageName, size, mimeType) {
-    const client = await query.pool.connect();
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
@@ -39,19 +39,35 @@ async function createFile(ownerId, originalName, storageName, size, mimeType) {
     }
 }
 
-async function getFiles(ownerId, page, limit) {
+async function getFiles(ownerId, page, limit, searchQuery = null) {
     const offset = (page - 1) * limit;
-
+    
+    if (searchQuery && searchQuery.trim() !== '') {
+        const search = `%${searchQuery.trim()}%`;
+        const filesResult = await query(
+            'SELECT id, original_name, size, mime_type, uploaded_at FROM files WHERE owner_id = $1 AND original_name ILIKE $2 ORDER BY uploaded_at DESC LIMIT $3 OFFSET $4',
+            [ownerId, search, limit, offset]
+        );
+        const countResult = await query(
+            'SELECT COUNT(*) FROM files WHERE owner_id = $1 AND original_name ILIKE $2',
+            [ownerId, search]
+        );
+        return {
+            files: filesResult.rows,
+            total: parseInt(countResult.rows[0].count)
+        };
+    }
+    
     const filesResult = await query(
         'SELECT id, original_name, size, mime_type, uploaded_at FROM files WHERE owner_id = $1 ORDER BY uploaded_at DESC LIMIT $2 OFFSET $3',
         [ownerId, limit, offset]
     );
-
+    
     const countResult = await query(
         'SELECT COUNT(*) FROM files WHERE owner_id = $1',
         [ownerId]
     );
-
+    
     return {
         files: filesResult.rows,
         total: parseInt(countResult.rows[0].count)
@@ -67,7 +83,7 @@ async function getFile(fileId, ownerId) {
 }
 
 async function deleteFile(fileId, ownerId) {
-    const client = await query.pool.connect();
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
