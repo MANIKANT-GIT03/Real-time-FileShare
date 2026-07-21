@@ -1,11 +1,10 @@
-const { query, pool } = require('../db');
+const { query } = require('../db');
 
 async function createFile(ownerId, originalName, storageName, size, mimeType) {
-    const client = await pool.connect();
+    const client = await query.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Lock the user row so no other upload can change storage_used at the same time
         const userRes = await client.query(
             'SELECT storage_used, storage_limit FROM users WHERE id = $1 FOR UPDATE',
             [ownerId]
@@ -17,18 +16,15 @@ async function createFile(ownerId, originalName, storageName, size, mimeType) {
 
         const { storage_used, storage_limit } = userRes.rows[0];
 
-        // PostgreSQL returns BIGINT as strings, so we parse them
         if (parseInt(storage_used) + size > parseInt(storage_limit)) {
             throw new Error('Storage quota exceeded');
         }
 
-        // Insert the file record
         await client.query(
             'INSERT INTO files (owner_id, original_name, storage_name, size, mime_type) VALUES ($1, $2, $3, $4, $5)',
             [ownerId, originalName, storageName, size, mimeType]
         );
 
-        // Update the user's storage quota
         await client.query(
             'UPDATE users SET storage_used = storage_used + $1 WHERE id = $2',
             [size, ownerId]
@@ -71,11 +67,10 @@ async function getFile(fileId, ownerId) {
 }
 
 async function deleteFile(fileId, ownerId) {
-    const client = await pool.connect();
+    const client = await query.pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Find the file and make sure it belongs to this user
         const fileRes = await client.query(
             'SELECT storage_name, size FROM files WHERE id = $1 AND owner_id = $2',
             [fileId, ownerId]
@@ -87,10 +82,8 @@ async function deleteFile(fileId, ownerId) {
 
         const { storage_name, size } = fileRes.rows[0];
 
-        // Delete from database
         await client.query('DELETE FROM files WHERE id = $1', [fileId]);
 
-        // Give the storage space back to the user
         await client.query(
             'UPDATE users SET storage_used = storage_used - $1 WHERE id = $2',
             [size, ownerId]

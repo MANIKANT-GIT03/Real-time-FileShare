@@ -38,45 +38,46 @@ async function validateMagicBytes(filePath, originalName) {
 }
 
 async function upload(req, res) {
-    console.log('UPLOAD FUNCTION RUNNING');
-
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const tempPath = req.file.path;
-    const originalName = req.file.originalname;
-
-    console.log('File:', originalName);
-
     try {
-        const realMimeType = await validateMagicBytes(tempPath, originalName);
-        console.log('Mime type:', realMimeType);
-
-        await fileService.createFile(
-            req.user.userId,
-            originalName,
-            req.file.filename,
-            req.file.size,
-            realMimeType
-        );
-
-        // Emit real-time event to all of this user's connected tabs
-        const io = req.app.get('io');
-        if (io) {
-            io.to(`user:${ownerId}`).emit('file:uploaded', {
-                file: {
-                    originalName,
-                    size,
-                    mimeType: realMimeType
-                }
-            });
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        res.status(201).json({ message: 'File uploaded successfully' });
+        const tempPath = req.file.path;
+        const originalName = req.file.originalname;
+        const ownerId = req.user.userId;  // <-- DEFINED HERE
+
+        console.log('Uploading:', originalName);
+
+        try {
+            const realMimeType = await validateMagicBytes(tempPath, originalName);
+            const storageName = req.file.filename;
+            const size = req.file.size;
+
+            await fileService.createFile(ownerId, originalName, storageName, size, realMimeType);
+
+            // Emit real-time event to all of this user's connected tabs
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`user:${ownerId}`).emit('file:uploaded', {
+                    file: {
+                        originalName,
+                        size,
+                        mimeType: realMimeType
+                    }
+                });
+            }
+
+            res.status(201).json({
+                message: 'File uploaded successfully',
+                file: { originalName, size, mimeType: realMimeType }
+            });
+        } catch (err) {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            throw err;
+        }
     } catch (err) {
-        console.log('Upload error:', err.message);
-        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        console.error('Upload error:', err.message);
         res.status(400).json({ error: err.message });
     }
 }
@@ -109,7 +110,7 @@ async function download(req, res) {
 async function remove(req, res) {
     try {
         const fileId = req.params.id;
-        const ownerId = req.user.userId;
+        const ownerId = req.user.userId;  // <-- DEFINED HERE
 
         const storageName = await fileService.deleteFile(fileId, ownerId);
 
