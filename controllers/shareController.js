@@ -1,6 +1,7 @@
 const shareService = require('../services/shareService');
 const fs = require('fs');
 const path = require('path');
+const storageService = require('../services/storageService');
 
 /**
  * POST /api/files/:id/share
@@ -26,16 +27,16 @@ async function create(req, res) {
         const share = await shareService.createShare(fileId, ownerId, maxDl, expiry);
 
         // Emit real-time event
-const io = req.app.get('io');
-if (io) {
-    io.to(`user:${ownerId}`).emit('file:shared', {
-        share: {
-            code: share.share_code,
-            fileId: fileId,
-            expiresAt: share.expires_at
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${ownerId}`).emit('file:shared', {
+                share: {
+                    code: share.share_code,
+                    fileId: fileId,
+                    expiresAt: share.expires_at
+                }
+            });
         }
-    });
-}
 
         res.status(201).json({
             message: 'Share code created',
@@ -72,13 +73,13 @@ async function redeem(req, res) {
 
 
         // Notify the file owner that someone redeemed their code
-const io = req.app.get('io');
-if (io && share) {
-    io.to(`user:${share.owner_id}`).emit('share:redeemed', {
-        code: share.share_code,
-        fileName: share.original_name
-    });
-}
+        const io = req.app.get('io');
+        if (io && share) {
+            io.to(`user:${share.owner_id}`).emit('share:redeemed', {
+                code: share.share_code,
+                fileName: share.original_name
+            });
+        }
 
         res.json({
             file: {
@@ -106,7 +107,6 @@ async function download(req, res) {
     try {
         const { code } = req.params;
 
-        // Validate format
         if (!code || !/^\d{6}$/.test(code)) {
             return res.status(400).json({ error: 'Invalid share code' });
         }
@@ -117,31 +117,29 @@ async function download(req, res) {
             return res.status(404).json({ error: 'Invalid, expired, or fully-used share code' });
         }
 
-        // Construct file path
-        const filePath = path.join(__dirname, '..', 'uploads', share.storage_name);
-
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found on disk' });
-        }
-
         // Increment download count BEFORE streaming
         await shareService.incrementDownloadCount(share.share_id);
 
-        // Stream the file
+        // Set download headers
         res.setHeader('Content-Disposition', `attachment; filename="${share.original_name}"`);
         res.setHeader('Content-Type', share.mime_type);
 
-        const stream = fs.createReadStream(filePath);
-        stream.pipe(res);
+        // Stream from B2 directly to the browser
+        await storageService.streamFromB2(share.storage_name, res);
 
-        stream.on('error', (err) => {
-            console.error('Stream error:', err);
-            if (!res.headersSent) {
-                res.status(500).json({ error: 'Error streaming file' });
-            }
-        });
+        // Notify the file owner in real-time
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${share.owner_id}`).emit('share:redeemed', {
+                code: share.share_code,
+                fileName: share.original_name
+            });
+        }
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Share download error:', err.message);
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        }
     }
 }
 
