@@ -100,6 +100,7 @@ async function login() {
     }
 }
 
+
 function logout() {
     token = null;
     localStorage.removeItem('fs_token');
