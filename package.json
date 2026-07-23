@@ -1,15 +1,19 @@
 {
   "name": "fileshare",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Real-time secure file sharing platform with cloud storage",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["file-sharing", "real-time", "cloud-storage", "nodejs", "postgresql"],
+  "author": "Your Name",
+  "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1092.0",
     "bcrypt": "^6.0.0",
